@@ -1,7 +1,5 @@
 import customtkinter
 from tkinter import filedialog as fd
-from chapter.main_window.audio.audio_process import choose_file_audio, list_file_in_folder
-from customtkinter.windows.CtkListbox import CTkListbox
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg, NavigationToolbar2Tk)
@@ -11,125 +9,317 @@ import seaborn as sns
 from datetime import date
 import calendar
 import pandas as pd
-
+from tkinter import ttk
+import json
+import logging
+logger = logging.getLogger("__BoxC__")
 
 class gui_vizualize(customtkinter.CTk):
     def __init__(self, gui):
         super().__init__()
-        self.data = {}
-        self.data_month = []
+        self.data_frame = []
+        self.data_plan = {}
+        self.data_base = {}
+        self.setup = True
+        # sns.set()
         self.today = date.today()
         _, self.days = calendar.monthrange(self.today.year, self.today.month)
-        self.insert_database()
-        sns.set()
+        self.except_ = False
+        self.money = tkinter.StringVar()
+        self.money.set("0"*10)
 
-        figure = Figure(figsize=(10, 6))
-
-        ax = figure.subplots()
-        ax = sns.barplot(self.data, x="days", y="pay", ax=ax, errorbar=None)
         # ax.set_xticklabels(ax.get_xticklabels(), rotation=60, horizontalalignment="center")
         self.ui = gui
         self.ui.grid_columnconfigure(2, weight=1)
         self.ui.grid_rowconfigure(2, weight=1)
-        self.frame_grap = customtkinter.CTkFrame(self.ui, corner_radius=10)
-        self.frame_grap.grid(row=0, column=0, columnspan = 4, padx=(20, 20), pady=(20, 0), sticky="nsew")
-        # canvas = FigureCanvasTkAgg(fig, master=self.frame_grap)
-        # canvas.draw()
-        # canvas.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=1)
-        self.entry = customtkinter.CTkEntry(self.ui, placeholder_text="CTkEntry")
-        self.entry.grid(row=3, column=1, columnspan=2, padx=(20, 0), pady=(20, 20), sticky="nsew")
-        canvas = FigureCanvasTkAgg(figure, master=self.frame_grap)
-        canvas.draw()
-        canvas.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=1)
-        # call key press event
+
+        self.pay = customtkinter.CTkEntry(self.ui, placeholder_text="CTkEntry")
+        self.pay.grid(row=3, column=0, columnspan=5, padx=(20, 20), pady=(20, 20), sticky="nsew")
+
+        ###---------###
+        self.frame_insert = customtkinter.CTkFrame(self.ui, corner_radius=10,)
+        self.frame_insert.grid(row=0, column=0, columnspan = 1, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        ### block 0 ###
+
+        self._optionemenu = customtkinter.CTkOptionMenu(self.frame_insert, values=["Total", "Interest", "Expenses"], command=self.control_graph)
+        self._optionemenu.grid(row=0, column=0, padx=(20, 20), pady=(20, 0))
+        self.day_current = customtkinter.CTkEntry(self.frame_insert, placeholder_text="CTkEntry")
+        self.day_current.grid(row=0, column=1, columnspan=2, padx=(20, 20), pady=(20, 0), sticky="nsew")
+
+        self.total_money_label = customtkinter.CTkLabel(self.frame_insert, text="Total money:", font=customtkinter.CTkFont(size=20, weight="bold"))
+        self.total_money_label.grid(row=1, column=0, columnspan = 1, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.total_money = customtkinter.CTkEntry(self.frame_insert, textvariable=self.money, font=customtkinter.CTkFont(size=20, weight="bold"), state="readonly")
+        self.total_money.grid(row=1, column=1, columnspan = 1, padx=(20, 20), pady=(20, 0), sticky="nsew")
 
 
-        # self.config_grid(self.frame_audio)
+        self.pay_money_label = customtkinter.CTkLabel(self.frame_insert, text="Pay money:", font=customtkinter.CTkFont(size=15, weight="normal"))
+        self.pay_money_label.grid(row=2, column=0, columnspan = 1, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.pay_money = customtkinter.CTkEntry(self.frame_insert, placeholder_text="Nhập số tiền mất hôm nay", font=customtkinter.CTkFont(size=10, weight="normal"))
+        self.pay_money.grid(row=2, column=1, columnspan = 1, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.pay_money.bind("<Return>", self.on_enter)
 
-        # # self.ui.grid_columnconfigure((1, 4, 2), weight=1)
-        # self.frame_list = customtkinter.CTkFrame(self.ui, width=100, corner_radius=10)
-        # self.frame_list.grid(row=0, column=4, rowspan=4, padx=(0, 20), pady=(20, 0), sticky="nsew")
-        # self.config_grid(self.frame_list)
-        # self.listbox = CTkListbox(self.frame_list, command=self.show_value)
-        # self.listbox.pack(fill="both", expand=True, padx=10, pady=10)
-        # self.listbox.rowconfigure(0, weight=1)
+        self.earn_money_label = customtkinter.CTkLabel(self.frame_insert, text="Earn money:", font=customtkinter.CTkFont(size=15, weight="normal"))
+        self.earn_money_label.grid(row=3, column=0, columnspan = 1, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.earn_money = customtkinter.CTkEntry(self.frame_insert, placeholder_text="Nhập số tiền kiếm được hôm nay", font=customtkinter.CTkFont(size=10, weight="normal"))
+        self.earn_money.grid(row=3, column=1, columnspan = 1, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.earn_money.bind("<Return>", self.update_data_today)
+        
+        #####################
+        ###---------###
+        self.frame_grap = customtkinter.CTkFrame(self.ui, corner_radius=10, width=200)
+        self.frame_grap.grid(row=0, column=1, columnspan = 2, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.frame_grap.grid_columnconfigure(2, weight=1)
+        self.frame_grap.grid_rowconfigure(2, weight=1)
+        ### block 1 ###
+        self.frame_control = customtkinter.CTkFrame(self.ui, corner_radius=10,)
+        self.frame_control.grid(row=1, column=0, columnspan = 1, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        
 
-        # #phần văn bản của app
-        # self.frame_text = customtkinter.CTkFrame(self.ui, corner_radius=5)
-        # self.frame_text.grid(row=1, column=0, columnspan = 4, padx=(20, 20), pady=(20, 20), sticky="nsew")
-        # self.config_grid(self.frame_text)
-        # self.textbox = customtkinter.CTkTextbox(self.frame_text)
-        # self.textbox.grid(row=1, column=0, columnspan = 5, rowspan = 3, padx=(20, 20), pady=(20, 20), sticky="nsew")
-        # self.textbox.insert('0.0', 'toilalinh03superbot')
+        self.plan_save_money = customtkinter.CTkFrame(self.ui, corner_radius=10, width=200)
+        self.plan_save_money.grid(row=1, column=2, columnspan = 2, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.plan_save_money.grid_columnconfigure(2, weight=1)
+        self.plan_save_money.grid_rowconfigure(2, weight=1)
 
-        # self.name_audio_frame = customtkinter.CTkFrame(self.frame_audio)
-        # self.name_audio_frame.grid(row=0, column=1, columnspan = 4,rowspan=1, padx=(10, 10), pady=(10, 10), sticky="nsew")
-        # self.name_audio_frame.grid_columnconfigure(2, weight=1)
-        # self.name_audio_frame.grid_rowconfigure(2, weight=1)
-        # self.label_audio = customtkinter.CTkLabel(master=self.name_audio_frame, text="Name audio")
-        # self.label_audio.grid(row=0, column=0, padx=(10, 10), pady=(10, 5), sticky="")
-        # self.slider_2 = customtkinter.CTkSlider(self.name_audio_frame,from_=0, height=100, to=100, number_of_steps=100, orientation="vertical", command=self.set_vol)
-        # self.slider_2.grid(row=0, column=4, rowspan=1, padx=(10, 10), pady=(0, 0), sticky="ns")
-        # # self.config_grid(self.name_audio_frame)
+        self.extra_save_money = customtkinter.CTkFrame(self.ui, corner_radius=10, width=200)
+        self.extra_save_money.grid(row=2, column=0, columnspan = 5, padx=(20, 20), pady=(20, 0), sticky="nsew")
+        self.extra_save_money.grid_columnconfigure(2, weight=1)
+        self.extra_save_money.grid_rowconfigure(2, weight=1)
+        try:
+            with open("chapter/main_window/database/data_base.json", 'r', encoding='utf-8') as json_file:
+                self.data_base = json.load(json_file)
+        except Exception as e:
+            self.except_ = True
+            logger.error('Không có dữ liệu trong file json', e)
+        with open("chapter/main_window/database/config.json", 'r', encoding='utf-8') as json_file:
+            self.data_config = json.load(json_file)
+
+        self.set_up_database()
+        self.create_dataframe()
+        self.insert_database()
+        self.visual_graph()
+        self.visual_table()
+
+    def on_enter(self,event):
+        # Hàm xử lý khi nhấn Enter
+        self.earn_money.focus_set()
+
+    def control_graph(self, value):
+        # "Total", "Interest", "Expenses"
+        if "Total" in value:
+            print("Total money:")            
+            message = str(self.data_config["salary"])
+        elif "Interest" in value:
+            print("Interest money:")
+            message = str(self.data_config["salary"]-self.data_config["total_lost"])    
+        elif "Expenses" in value:
+            print("Expenses money:")            
+            message = str(self.data_config["total_lost"])
+        self.money.set('0'*(10-len(message))+message)
+        self.total_money.configure(textvariable=self.money)
+        
+
+    def visual_graph(self):
+        self.frame_grap.destroy()
+        self.frame_grap = customtkinter.CTkFrame(self.ui, corner_radius=10, width=200)
+        self.frame_grap.grid(row=0, column=2, columnspan = 2, padx=(20, 20), pady=(20, 0), sticky="nsew")
+
+        self.plan_save_money.destroy()
+        self.plan_save_money = customtkinter.CTkFrame(self.ui, corner_radius=10, width=200)
+        self.plan_save_money.grid(row=1, column=2, columnspan = 2, padx=(20, 20), pady=(20, 0), sticky="nsew")
+
+        figure_top = Figure(figsize=(7, 3))
+        figure_mid = Figure(figsize=(7, 3))
+        ax_top = figure_top.subplots()
+        ax_mid = figure_mid.subplots()
+
+        ax=sns.barplot(self.data_frame, x="date", y="earn", ax=ax_top, errorbar=None, label = "pay")
+        ax.patches[0].set_facecolor('orange')  # Đổi màu cột thứ 2 thành màu cam
+        ax_ = ax_top.twinx()
+        ax_ = sns.lineplot(x='date', y='pay', data=self.data_frame, marker='o', ax=ax_, color='red', label='earn')
+        
+        sns.barplot(self.data_plan, x="Blocks", y="Interest", ax=ax_mid, errorbar=None, label = "plan", color='green')
+        sns.barplot(self.data_plan, x="Blocks", y="Lost", ax=ax_mid, errorbar=None, label = "plan", color='red',bottom=self.data_plan['Interest'])
+
+        canvas_top = FigureCanvasTkAgg(figure_top, master=self.frame_grap)
+        canvas_mid = FigureCanvasTkAgg(figure_mid, master=self.plan_save_money)
+
+        canvas_top.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH,  expand=6)
+        canvas_mid.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH,  expand=6)
+        
+        canvas_top.draw()
+        canvas_mid.draw()
+
+        # except:
+        #     canvas_top.delete("all")
+        #     canvas_mid.delete("all")
+        #     self.visual_graph()
+            
+    def visual_table(self):
+        self.extra_save_money.destroy()
+        self.extra_save_money = customtkinter.CTkFrame(self.ui, corner_radius=10, width=200)
+        self.extra_save_money.grid(row=2, column=0, columnspan = 5, padx=(20, 20), pady=(20, 0), sticky="nsew")
+       
+        self.tree = ttk.Treeview(self.extra_save_money, columns=list(self.data_plan.columns), show="headings")
+        for col in self.data_plan.columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=100)  # Thiết lập độ rộng cột (có thể điều chỉnh)
+        for index, row in self.data_plan.iterrows():
+            self.tree.insert("", "end", values=tuple(row))
+        yscrollbar = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscroll=yscrollbar.set)
+
+        # Hiển thị Treeview và Scrollbar
+        self.tree.pack(side="left", fill="both", expand=True)
+        yscrollbar.pack(side="right", fill="y")
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.map("Treeview")
+
+    def create_database(self):
+        data_base = {}
+        year_base = {}
+        month_base = {}
+        day_base = {}
+        self.today = date.today()
+        _, self.days = calendar.monthrange(self.today.year, self.today.month)
+        day_base["earn"] = 0
+        day_base["pay"] = 0
+        month_base[str(self.today.day)] = day_base
+        year_base[str(self.today.month)] = month_base
+        data_base[str(self.today.year)] = year_base
 
 
-        # self.slider_progressbar_frame = customtkinter.CTkFrame(self.name_audio_frame, fg_color="transparent")
-        # self.slider_progressbar_frame.grid(row=1, column=0, columnspan = 4, padx=(0, 0), pady=(0, 0), sticky="nsew")
-        # self.slider_progressbar_frame.grid_columnconfigure(4, weight=1)
-        # self.slider_progressbar_frame.grid_rowconfigure(4, weight=1)
-        # self.progressbar_2 = customtkinter.CTkProgressBar(self.slider_progressbar_frame)
-        # self.progressbar_2.grid(row=1, column=0, padx=(10, 10), pady=(0, 0), sticky="ew")
+    # def create_database(self,data_base):
+    def create_dataframe(self):
+        column = {}
+        # date = "23-2-2021"
+        date = f"{self.today.day}-{self.today.month}-{self.today.year}"
+        date_ = date.split("-")
+        for k in self.data_base[date_[2]][date_[1]]:
+            
+            for l in self.data_base[date_[2]][date_[1]][k]:
+                data_in = self.data_base[date_[2]][date_[1]][k]
+                try:
+                    column[str(l)].append(data_in[str(l)])
+                except:
+                    column[str(l)] = []
+                    column[str(l)].append(data_in[str(l)])
+            try:
+                column["date"].append(k)
+            except:
+                column["date"] = []
+                column["date"].append(k)
 
-        # self.input_button_back = customtkinter.CTkButton(self.slider_progressbar_frame,width=50, text="<", command=self.opendir)
-        # self.input_button_back.grid(row=0, column=0, padx=(10, 10), pady=(0, 0))
-        # self.input_button_next = customtkinter.CTkButton(self.slider_progressbar_frame,width=50, text=">", command=self.create_list)
-        # self.input_button_next.grid(row=0, column=2, padx=(10, 10), pady=(0, 0))
-        # self.input_button_play = customtkinter.CTkButton(self.slider_progressbar_frame,width=50, text="Play", command=self.play_audio)
-        # self.input_button_play.grid(row=0, column=1, padx=(10, 10), pady=(0, 0))
-        # self.slider_1 = customtkinter.CTkSlider(self.slider_progressbar_frame, from_=0, to=100, number_of_steps=100, command=self.set_pos)
-        # self.slider_1.grid(row=0, column=3, columnspan = 4, padx=(10, 10), pady=(0, 0), sticky="ew")
-        # self.slider_progressbar_frame.bind("<KeyPress>", self.on_key_press)
+        self.data_frame = pd.DataFrame(data=column)
+
+        # return data_frame
+    def set_up_database(self):
+        # today = f"{self.today.day}-{self.today.month}-{self.today.year}"
+        print("Update data base!")
+        if self.today.day-1<1 or self.except_ == True:
+            self.setup=False
+            for i in range(self.days):
+                self.input_date = f"{i+1}-{self.today.month}-{self.today.year}"
+                self.update_database()
+        # yesterday = f"{self.today.day-1}-{self.today.month}-{self.today.year}"
+
+    def update_data_today(self, event):
+        print("Update data today!")
+        self.setup == True
+        self.update_database()
+
+    def update_database(self):
+        try:
+            earn_money = float(self.earn_money.get())
+            pay_money = float(self.pay_money.get())
+        except:
+            earn_money = 0
+            pay_money = 0
+
+        if self.setup == True:
+            date_ = f"{self.today.day}-{self.today.month}-{self.today.year}"
+        else:
+            date_ = self.input_date
+        date_ = date_.split("-")
+        print(date_)
+        try:
+            year_base = self.data_base[date_[2]]
+        except:
+            self.data_base[date_[2]] = {}
+            year_base = self.data_base[date_[2]]
+
+        try:
+            month_base = year_base[date_[1]]
+        except:
+            year_base[date_[1]] = {}
+            month_base = year_base[date_[1]]
+
+        try:
+            day_base = month_base[date_[0]]
+        except:
+            month_base[date_[0]] = {}
+            day_base = month_base[date_[0]]
+        try:
+            day_base["earn"] += earn_money
+        except:
+            day_base["earn"] = 0
+            # day_base["earn"] += int(self.earn_money.get())
+        try:
+            day_base["pay"] += pay_money
+        except:
+            day_base["pay"] = 0
+            # day_base["pay"] += int(self.pay_money.get())
 
 
+        day_base["note"] = "Xin chào! hôm nay tôi vẫn vô dụng chưa làm được gì cả."
 
+        month_base[date_[0]] = day_base
+        year_base[date_[1]] = month_base
+        self.data_base[date_[2]] = year_base
+        self.data_config["total_lost"] += pay_money
+        print(self.data_config)
+        with open("chapter/main_window/database/data_base.json", 'w', encoding="utf-8") as json_file:
+            json.dump(self.data_base, json_file, ensure_ascii=False)
+        with open("chapter/main_window/database/config.json", 'w', encoding="utf-8") as json_file:
+            json.dump(self.data_config, json_file, ensure_ascii=False)
+        if self.setup==True:
+            self.create_dataframe()
+            self.insert_database()
+            self.visual_graph()
+            self.visual_table()
 
-        # self.button_frame_1 = customtkinter.CTkFrame(self.frame_audio)
-        # self.button_frame_1.grid(row=1, column=1, columnspan = 4, padx=(10, 10), pady=(10, 10), sticky="nsew")
-        # self.button_frame_1.grid_columnconfigure(2, weight=1)
-        # self.button_frame_1.grid_rowconfigure(2, weight=1)
-
-        # self.combobox_3 = customtkinter.CTkComboBox(self.button_frame_1, width=300, values=['...'])
-        # self.combobox_3.grid(row=0, column=0, rowspan = 1, padx=(10, 10), pady=(10, 10))
-        # self.input_button_3 = customtkinter.CTkButton(self.button_frame_1, text="Choose", command=self.opendir)
-        # self.input_button_3.grid(row=0, column=1,  padx=(10, 10), pady=(10,10))
-        # self.combobox_4 = customtkinter.CTkComboBox(self.button_frame_1, width=300, values=['...'])
-        # self.combobox_4.grid(row=1, column=0,  padx=(10, 10), pady=(10, 10))
-        # self.input_button_4 = customtkinter.CTkButton(self.button_frame_1, text="Save", command=self.opensave)
-        # self.input_button_4.grid(row=1, column=1, padx=(10, 10), pady=(10,10))
+        
 
     def insert_database(self):
-        self.data = {}
-        days = []
-        months = []
-        years = []
-        pay_in_day = []
-        for i in range(self.days):
-            day = '0'*(2-len(str(i+1)))+str(i+1) 
-            month = '0'*(2-len(str(self.today.month)))+str(self.today.month) 
-            year = f"{self.today.year}"
-            days.append(day)
-            months.append(month)
-            years.append(year)
+        data_plan_block = []
+        data_plan_interest = []
+        data_plan_lost = []
+        self.ratio = self.data_config["ratio"]
+        self.salary=self.data_config["salary"]
+        self.total_lost = self.data_config["total_lost"]
+        ratio = self.ratio.split("-")
+        print(ratio)
+        for i in range(len(ratio)):
+            if self.total_lost>0:
+                if self.salary*int(ratio[i])/100 < self.total_lost:
+                    data_plan_lost.append(self.salary*int(ratio[i])/100)
+                else:
+                    data_plan_lost.append(self.total_lost)
+                self.total_lost = self.total_lost - self.salary*int(ratio[i])/100
+                
+            else:
+                data_plan_lost.append(0)
 
-        # print("Ngay hien tai:", today)
-        self.data["days"] = days
-        self.data["months"] = months
-        self.data["years"] = years
+            data_plan_block.append(f"Block {i}[{ratio[i]}]")
+            data_plan_interest.append(self.salary*int(ratio[i])/100)
+        
+        self.data_plan["Blocks"] = data_plan_block
+        self.data_plan["Money"] = data_plan_interest
+        self.data_plan["Lost"] = data_plan_lost
+        self.data_plan["Interest"] = [data_plan_interest[i] - data_plan_lost[i] for i in range(len(data_plan_interest))]
 
-        for i in range(self.days):
-            pay_in_day.append(i)
-        self.data["pay"] = pay_in_day
-        self.data["earn"] = pay_in_day
-        self.data_month = pd.DataFrame(data=self.data)
+        self.data_plan = pd.DataFrame(data=self.data_plan)
+        print(self.data_plan)
+
 
 
