@@ -1,9 +1,6 @@
 import customtkinter
-from tkinter import filedialog as fd
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import (
-    FigureCanvasTkAgg, NavigationToolbar2Tk)
-import numpy as np
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter
 import seaborn as sns
 from datetime import date
@@ -26,7 +23,7 @@ class gui_vizualize(customtkinter.CTk):
         _, self.days = calendar.monthrange(self.today.year, self.today.month)
         self.except_ = False
         self.money = tkinter.StringVar()
-        self.money.set("0"*10)
+        self.money.set("0"*9+".0")
 
         # ax.set_xticklabels(ax.get_xticklabels(), rotation=60, horizontalalignment="center")
         self.ui = gui
@@ -114,7 +111,7 @@ class gui_vizualize(customtkinter.CTk):
         elif "Expenses" in value:
             print("Expenses money:")            
             message = str(self.data_config["total_lost"])
-        self.money.set('0'*(10-len(message))+message)
+        self.money.set('0'*(11-len(message))+message)
         self.total_money.configure(textvariable=self.money)
         
 
